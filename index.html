@@ -349,7 +349,7 @@
   <div class="card set">
     <h1>⚙️ Settings</h1>
     <div class="grp"><div class="gl">What do you want to practice?</div>
-      <div class="chips" data-key="math"><button data-v="mult">✖️ Multiply</button><button data-v="addsub">➕➖ Add &amp; Subtract</button><button data-v="all">🌈 Mix it all</button></div></div>
+      <div class="chips" data-key="math"><button data-v="mult">✖️ Multiply</button><button data-v="div">➗ Divide</button><button data-v="multdiv">✖️➗ Mult &amp; Div</button><button data-v="addsub">➕➖ Add &amp; Sub</button><button data-v="all">🌈 Mix it all</button></div></div>
     <div class="grp"><div class="gl">Bot level</div>
       <div class="chips" data-key="bots"><button data-v="0">🐣 Rookie</button><button data-v="1">🚗 Racer</button><button data-v="2">🔥 Pro</button><button data-v="3">👑 Champ</button></div>
       <div class="hint" id="botHint"></div></div>
@@ -973,16 +973,31 @@ function makeProblem() {
   const addMax = [15, 25, 40][SET.size];
   const candidates = [];
 
-  if (SET.math === 'mult' || SET.math === 'all') {
+  const hasMult = SET.math === 'mult' || SET.math === 'multdiv' || SET.math === 'all';
+  const hasDiv = SET.math === 'div' || SET.math === 'multdiv' || SET.math === 'all';
+  const hasAddSub = SET.math === 'addsub' || SET.math === 'all';
+
+  if (hasMult || hasDiv) {
     for (let a = 2; a <= fMax; a++) {
       for (let b = 2; b <= fMax; b++) {
-        const key = 'm' + Math.min(a, b) + 'x' + Math.max(a, b);
-        candidates.push({ type: 'product', a, b, c: a * b, answer: a * b, key });
-        candidates.push({ type: 'missing', a, b, c: a * b, answer: b, key });
+        const prod = a * b;
+        if (hasMult) {
+          const keyM = 'm' + Math.min(a, b) + 'x' + Math.max(a, b);
+          candidates.push({ type: 'product', a, b, c: prod, answer: prod, key: keyM });
+          candidates.push({ type: 'missing', a, b, c: prod, answer: b, key: keyM });
+        }
+        if (hasDiv) {
+          const keyD = 'd' + Math.min(a, b) + 'x' + Math.max(a, b);
+          // Standard division: e.g. 35 ÷ 7 = 5
+          candidates.push({ type: 'div', a: prod, b: a, c: b, answer: b, key: keyD });
+          // Missing divisor: e.g. 35 ÷ ? = 5
+          candidates.push({ type: 'divMissing', a: prod, b: a, c: b, answer: a, key: keyD });
+        }
       }
     }
   }
-  if (SET.math === 'addsub' || SET.math === 'all') {
+
+  if (hasAddSub) {
     for (let a = 1; a <= Math.ceil(addMax * 0.7); a++) {
       for (let b = 1; b <= addMax - a; b++) {
         const key = 'a' + Math.min(a, b) + '+' + Math.max(a, b);
@@ -1005,8 +1020,10 @@ function makeProblem() {
 function renderProblem(p) {
   inputVal = '';
   const slot = '<span class="slot" id="slot">?</span>', n = (v, c) => `<span class="${c}">${v}</span>`;
-  const op = (p.type === 'product' || p.type === 'missing') ? '×' : (p.type === 'add' || p.type === 'addMissing') ? '+' : '−';
-  const miss = p.type === 'missing' || p.type === 'addMissing' || p.type === 'subMissing';
+  const op = (p.type === 'product' || p.type === 'missing') ? '×'
+           : (p.type === 'div' || p.type === 'divMissing') ? '÷'
+           : (p.type === 'add' || p.type === 'addMissing') ? '+' : '−';
+  const miss = p.type === 'missing' || p.type === 'addMissing' || p.type === 'subMissing' || p.type === 'divMissing';
   eqEl.innerHTML = n(p.a, 'a') + `<span class="op">${op}</span>` + (miss ? slot : n(p.b, 'b')) + '<span class="is">=</span>' + (miss ? n(p.c, 'b') : slot);
   eqEl.classList.toggle('long', String(p.a).length + String(p.b).length + String(p.c).length >= 8);
   eqEl.classList.remove('pop'); void eqEl.offsetWidth; eqEl.classList.add('pop');
@@ -1216,14 +1233,25 @@ const LEVELS = [
   { n: 'Pro',      mul: 1.08, lo: -0.03, hi: 0.07, surge: 0.04, hint: 'Fast rivals! You will need quick answers and streaks to podium.' },
   { n: 'Champ',    mul: 1.16, lo: -0.02, hi: 0.09, surge: 0.08, hint: 'Speedy champions! Only a flawless 10-streak can claim 1st.' },
 ];
-const MATH_NAME = { mult: 'Multiply', addsub: 'Add & Subtract', all: 'Mixed math' };
+const MATH_NAME = {
+  mult: 'Multiply',
+  div: 'Divide',
+  multdiv: 'Multiply & Divide',
+  addsub: 'Add & Subtract',
+  all: 'Mixed math'
+};
 const DEFAULT_SET = { math: 'mult', bots: 1, size: 1, race: 10, beam: 6 };
 const SET = Object.assign({}, DEFAULT_SET);
 try { Object.assign(SET, JSON.parse(localStorage.getItem('pcr-settings') || '{}')); } catch (e) {}
 
 const sizeHint = () => {
   const f = [5, 10, 12][SET.size], m = ['15', '25', '40'][SET.size], parts = [];
-  if (SET.math !== 'addsub') parts.push(`× tables up to ${f}`); if (SET.math !== 'mult') parts.push(`+ and − within ${m}`); return parts.join(' · ');
+  if (SET.math === 'mult') parts.push(`× tables up to ${f}`);
+  else if (SET.math === 'div') parts.push(`÷ facts up to ${f * f} ÷ ${f}`);
+  else if (SET.math === 'multdiv') parts.push(`× and ÷ facts up to ${f}`);
+  else if (SET.math === 'addsub') parts.push(`+ and − within ${m}`);
+  else if (SET.math === 'all') parts.push(`× & ÷ up to ${f} · + & − within ${m}`);
+  return parts.join(' · ');
 };
 
 function exportData() {
