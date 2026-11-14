@@ -1196,6 +1196,8 @@ function resetRace() {
   updateHud();
 }
 function startRace() {
+  if (state === 'countdown' || state === 'racing') return;
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   ensureAudio(); applySet(); resetRace(); state = 'countdown'; $('settings').classList.add('gone');
   $('start').classList.add('gone'); $('results').classList.add('gone'); hud.classList.remove('off');
   const cn = $('countNum'), cw = $('count'); cw.style.display = 'grid';
@@ -1343,7 +1345,6 @@ $('endBtn').addEventListener('click', () => {
   if (!endArmed) { endArmed = setTimeout(() => { endArmed = 0; $('endBtn').textContent = '🏁 End Game'; }, 3000); $('endBtn').textContent = 'Tap again to end'; return; }
   clearTimeout(endArmed); endArmed = 0; $('endBtn').textContent = '🏁 End Game'; paused = false; $('pause').classList.add('gone'); endRace(true);
 });
-addEventListener('keydown', (e) => { if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') { if (paused) { if ($('settings').classList.contains('gone')) resumeGame(); else $('settings').classList.add('gone'); } else pauseGame(); } });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
 $('setBtn').addEventListener('click', openSettings); $('setBtn2').addEventListener('click', openSettings);
 $('setDone').addEventListener('click', () => $('settings').classList.add('gone'));
@@ -1354,15 +1355,49 @@ $('clearBtn').addEventListener('click', clearData);
 applySet();
 
 /* ---- input binding ---- */
-kbtns.forEach((b) => b.addEventListener('click', () => onKeypad(b.dataset.k)));
+kbtns.forEach((b) => b.addEventListener('click', () => {
+  onKeypad(b.dataset.k);
+  if (b.blur) b.blur();
+}));
 addEventListener('keydown', (e) => {
-  if (state !== 'racing') return;
-  if (e.key >= '0' && e.key <= '9') onKeypad(e.key);
-  else if (e.key === 'Backspace' || e.key === 'Delete') onKeypad('clear');
-  else if (e.key === 'Enter') onKeypad('beam');
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+    if (paused) {
+      if ($('settings').classList.contains('gone')) resumeGame();
+      else $('settings').classList.add('gone');
+    } else {
+      pauseGame();
+    }
+    return;
+  }
+  if (state === 'menu' || state === 'finished') {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      startRace();
+    }
+    return;
+  }
+  if (state !== 'racing') {
+    if (e.key === 'Enter') e.preventDefault();
+    return;
+  }
+  if (e.key >= '0' && e.key <= '9') {
+    e.preventDefault();
+    onKeypad(e.key);
+  } else if (e.key === 'Backspace' || e.key === 'Delete') {
+    e.preventDefault();
+    onKeypad('clear');
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    e.stopPropagation();
+    if (document.activeElement && document.activeElement.blur) {
+      document.activeElement.blur();
+    }
+    onKeypad('beam');
+  }
 });
-$('mute').addEventListener('click', () => { soundOn = !soundOn; $('mute').textContent = soundOn ? '🔊' : '🔇'; if (!soundOn && window.speechSynthesis) speechSynthesis.cancel(); });
-$('goBtn').addEventListener('click', startRace); $('againBtn').addEventListener('click', startRace);
+$('mute').addEventListener('click', () => { soundOn = !soundOn; $('mute').textContent = soundOn ? '🔊' : '🔇'; if (!soundOn && window.speechSynthesis) speechSynthesis.cancel(); $('mute').blur(); });
+$('goBtn').addEventListener('click', (e) => { e.currentTarget.blur(); startRace(); });
+$('againBtn').addEventListener('click', (e) => { e.currentTarget.blur(); startRace(); });
 
 /* =====================================================================
    8. HUD UPDATES
